@@ -1,176 +1,89 @@
-Sub GenererPlanningDouble()
-    ' --- Initialisation des deux feuilles de planning concernées ---
-    Dim ws1 As Worksheet, ws2 As Worksheet
-    Set ws1 = ThisWorkbook.Sheets("PLANNING AFFAIRES")
-    Set ws2 = ThisWorkbook.Sheets("PLANNING METRE ET GEOMETRE")
+Sub Button1_Click()
 
-    ' --- Déclaration des constantes pour repérer les lignes et colonnes clés dans les deux feuilles ---
-    Const COL_DEBUT As Long = 23   ' Colonne W = 23 (point de départ des colonnes à remplir)
-    Const LIGNE_SEMAINE_WS1 As Long = 3
-    Const LIGNE_JOUR_WS1 As Long = 4
-    Const LIGNE_SEMAINE_WS2 As Long = 4
-    Const LIGNE_JOUR_WS2 As Long = 5
+    ' --- Constantes de configuration des feuilles et colonnes ---
+    Const FEUILLE_AFFAIRES As String = "PLANNING AFFAIRES"
+    Const FEUILLE_METRE As String = "PLANNING METRE ET GEOMETRE"
+    Const COL_ID As Long = 286           ' Colonne contenant l'identifiant unique (JZ devient KA)
+    Const COL_START As Long = 3          ' Début des colonnes à synchroniser (ex: colonne C)
+    Const COL_END As Long = 22           ' Fin des colonnes à synchroniser (ex: colonne V)
+    Const COL_DATE_Q As Long = 18        ' Colonne contenant la date (R)
+    Const COL_COULEUR_Q As Long = 17     ' Colonne contenant la couleur liée à la date (Q)
+    Const HEADER_ROW As Long = 5         ' Ligne d'en-tête dans le planning
+    Const START_COL As Long = 23         ' Début des colonnes du planning (W)
 
-    ' --- Saisie de l’année par l’utilisateur avec contrôle de validité ---
-    Dim annee As Integer
-    annee = InputBox("Année à générer (ex : 2025)", "Planning", Year(Date))
-    If annee < 1900 Or annee > 2100 Then MsgBox "Année invalide": Exit Sub
+    ' --- Initialisation des feuilles et dernière ligne ---
+    Dim wsSrc As Worksheet: Set wsSrc = ThisWorkbook.Sheets(FEUILLE_AFFAIRES)
+    Dim wsPMG As Worksheet: Set wsPMG = ThisWorkbook.Sheets(FEUILLE_METRE ET GEOMETRE)
+    Dim lastRow As Long: lastRow = wsSrc.Cells(wsSrc.Rows.Count, COL_ID).End(xlUp).row
 
-    ' --- Suppression des anciennes données (nettoyage des lignes semaine/jour) ---
-    With ws1
-        .Range(.Cells(LIGNE_SEMAINE_WS1, COL_DEBUT), .Cells(LIGNE_SEMAINE_WS1, COL_DEBUT + 259)).UnMerge
-        .Range(.Cells(LIGNE_SEMAINE_WS1, COL_DEBUT), .Cells(LIGNE_SEMAINE_WS1, COL_DEBUT + 259)).Clear
-        .Range(.Cells(LIGNE_JOUR_WS1, COL_DEBUT), .Cells(LIGNE_JOUR_WS1, COL_DEBUT + 259)).UnMerge
-        .Range(.Cells(LIGNE_JOUR_WS1, COL_DEBUT), .Cells(LIGNE_JOUR_WS1, COL_DEBUT + 259)).Clear
-    End With
-    With ws2
-        .Range(.Cells(LIGNE_SEMAINE_WS2, COL_DEBUT), .Cells(LIGNE_SEMAINE_WS2, COL_DEBUT + 259)).UnMerge
-        .Range(.Cells(LIGNE_SEMAINE_WS2, COL_DEBUT), .Cells(LIGNE_SEMAINE_WS2, COL_DEBUT + 259)).Clear
-        .Range(.Cells(LIGNE_JOUR_WS2, COL_DEBUT), .Cells(LIGNE_JOUR_WS2, COL_DEBUT + 259)).UnMerge
-        .Range(.Cells(LIGNE_JOUR_WS2, COL_DEBUT), .Cells(LIGNE_JOUR_WS2, COL_DEBUT + 259)).Clear
-    End With
+    Dim r As Long, c As Long
+    Dim cellulesMaj As Long: cellulesMaj = 0
 
-    ' --- Définition de la plage de dates à générer ---
-    Dim premierJour As Date: premierJour = DateSerial(annee, 1, 1)
-    Dim dernierJour As Date: dernierJour = DateSerial(annee, 12, 31)
-    Dim col As Long: col = COL_DEBUT
-    Dim d As Date: d = premierJour
+    ' --- Optimisation : désactive les événements et le rafraîchissement d'écran ---
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
 
-    ' --- Gestion de la première semaine partielle (si l’année ne commence pas un lundi) ---
-    Dim joursPremiereSemaine As Integer: joursPremiereSemaine = 0
-    Dim startSemaine As Date: startSemaine = d
-    Do While Weekday(d, vbMonday) > 5 And d <= dernierJour
-        d = d + 1
-    Loop
-    startSemaine = d
+    ' --- 1) Synchronisation des cellules entre feuilles ---
+    ' Pour chaque ligne avec un identifiant, on copie les valeurs et les couleurs dans les autres feuilles
+    For r = 5 To lastRow
+        If wsSrc.Cells(r, COL_ID).Value <> "" Then
+            For c = COL_START To COL_END
+                Call Sheet1.SyncToOtherSheets(Sheet1.Cells(r, c), Sheet1, COL_ID)
+                cellulesMaj = cellulesMaj + 1
+            Next c
+        Else
+            Debug.Print "Ligne " & r & " : pas d'ID, ignorée."
+        End If
+    Next r
 
-    ' --- Remplissage des 5 premiers jours ouvrés (lundi à vendredi) ---
-    Dim jours(1 To 5) As Date
-    Dim i As Integer: i = 1
-    Do While d <= dernierJour And Weekday(d, vbMonday) <= 5 And i <= 5
-        jours(i) = d
+    ' --- 2) Mise à jour de la coloration des plannings ligne par ligne ---
+    ' Appelle une fonction spécifique pour colorer la cellule correspondant à la date
+    For r = 5 To lastRow
+        If wsSrc.Cells(r, COL_ID).Value <> "" Then
+            Sheet1.SynchroniseCasePlanning r
+        End If
+    Next r
 
-        ' Remplissage visuel et mise en forme dans PLANNING AFFAIRES
-        ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).Value = d
-        ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).NumberFormat = "dd"
-        ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).Font.Bold = True
-        ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).Font.Color = vbWhite
-        ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).Interior.Color = RGB(39, 82, 140)
-        ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).HorizontalAlignment = xlCenter
-        With ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).Borders
-            .LineStyle = xlContinuous
-            .Weight = xlMedium
-        End With
+    ' --- 3) Mise en surbrillance des lignes avec "exc" dans la colonne "coef" ---
+    ' Si "exc" est détecté, on colore la cellule en jaune pâle (sur les deux feuilles)
+    Dim wsAff As Worksheet
+    Dim r2 As Long, lastRowAff As Long, lastRowPMG As Long
 
-        ' Même chose dans PLANNING METRE ET GEOMETRE
-        ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).Value = d
-        ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).NumberFormat = "dd"
-        ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).Font.Bold = True
-        ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).Font.Color = vbWhite
-        ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).Interior.Color = RGB(39, 82, 140)
-        ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).HorizontalAlignment = xlCenter
-        With ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).Borders
-            .LineStyle = xlContinuous
-            .Weight = xlMedium
-        End With
+    Set wsAff = ThisWorkbook.Sheets(FEUILLE_AFFAIRES)
+    lastRowAff = wsAff.Cells(wsAff.Rows.Count, COL_ID).End(xlUp).row
+    For r2 = 5 To lastRowAff
+        If LCase(wsAff.Cells(r2, 21).Value) = "exc" Then      ' Colonne U (index 21)
+            wsAff.Cells(r2, 21).Interior.Color = RGB(255, 255, 153)
+        End If
+    Next r2
 
-        joursPremiereSemaine = joursPremiereSemaine + 1
-        d = d + 1
-        i = i + 1
-    Loop
+    lastRowPMG = wsPMG.Cells(wsPMG.Rows.Count, COL_ID).End(xlUp).row
+    For r2 = 5 To lastRowPMG
+        If LCase(wsPMG.Cells(r2, 23).Value) = "exc" Then      ' Colonne W (index 23)
+            wsPMG.Cells(r2, 23).Interior.Color = RGB(255, 255, 153)
+        End If
+    Next r2
 
-    ' --- Fusion des cellules semaine (en-tête semaine) pour la 1ère semaine partielle ---
-    ws1.Range(ws1.Cells(LIGNE_SEMAINE_WS1, col), ws1.Cells(LIGNE_SEMAINE_WS1, col + joursPremiereSemaine - 1)).Merge
-    ws1.Cells(LIGNE_SEMAINE_WS1, col).Value = Format(jours(1), "dd-mmm")
-    ws1.Cells(LIGNE_SEMAINE_WS1, col).HorizontalAlignment = xlCenter
-    ws1.Cells(LIGNE_SEMAINE_WS1, col).Font.Bold = True
-    ws1.Cells(LIGNE_SEMAINE_WS1, col).Interior.Color = RGB(175, 61, 61)
-    ws1.Cells(LIGNE_SEMAINE_WS1, col).Font.Color = vbWhite
-    With ws1.Range(ws1.Cells(LIGNE_SEMAINE_WS1, col), ws1.Cells(LIGNE_SEMAINE_WS1, col + joursPremiereSemaine - 1)).Borders
-        .LineStyle = xlContinuous
-        .Weight = xlMedium
-    End With
+    ' --- 4) Coloration conditionnelle des cases du planning ---
+    ' Pour chaque ligne avec une date en colonne R (dateQ) et une couleur en Q (coulQ),
+    ' on applique la couleur sur la cellule correspondante du planning
+    For r2 = 5 To lastRowPMG
+        Dim dateQ As Variant, coulQ As Long
+        dateQ = wsPMG.Cells(r2, COL_DATE_Q).Value
+        coulQ = wsPMG.Cells(r2, COL_COULEUR_Q).Interior.Color
+        If IsDate(dateQ) Then
+            Sheet2.ColorieCaseQ wsPMG, r2, HEADER_ROW, START_COL, dateQ, coulQ
+        Else
+            ' Si aucune date : on efface la couleur de la cellule correspondante
+            Sheet2.ColorieCaseQ wsPMG, r2, HEADER_ROW, START_COL, "", -1
+        End If
+    Next r2
 
-    ' Idem pour la deuxième feuille
-    ws2.Range(ws2.Cells(LIGNE_SEMAINE_WS2, col), ws2.Cells(LIGNE_SEMAINE_WS2, col + joursPremiereSemaine - 1)).Merge
-    ws2.Cells(LIGNE_SEMAINE_WS2, col).Value = Format(jours(1), "dd-mmm")
-    ws2.Cells(LIGNE_SEMAINE_WS2, col).HorizontalAlignment = xlCenter
-    ws2.Cells(LIGNE_SEMAINE_WS2, col).Font.Bold = True
-    ws2.Cells(LIGNE_SEMAINE_WS2, col).Interior.Color = RGB(175, 61, 61)
-    ws2.Cells(LIGNE_SEMAINE_WS2, col).Font.Color = vbWhite
-    With ws2.Range(ws2.Cells(LIGNE_SEMAINE_WS2, col), ws2.Cells(LIGNE_SEMAINE_WS2, col + joursPremiereSemaine - 1)).Borders
-        .LineStyle = xlContinuous
-        .Weight = xlMedium
-    End With
+    ' --- Réactivation des événements Excel et rafraîchissement visuel ---
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
 
-    col = col + joursPremiereSemaine
+    ' --- Message final ---
+    MsgBox "Refresh terminé : " & cellulesMaj & " cellules synchronisées et plannings colorés.", vbInformation
 
-    ' --------- Boucle sur les semaines complètes de l’année ---------
-    Do While d <= dernierJour
-        Dim joursSemaine(1 To 5) As Date
-        Dim joursDansSemaine As Integer: joursDansSemaine = 0
-        Dim j As Integer: j = 1
-        Do While d <= dernierJour And joursDansSemaine < 5
-            If Weekday(d, vbMonday) <= 5 Then
-                joursSemaine(j) = d
-
-                ' Remplissage pour PLANNING AFFAIRES
-                ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).Value = d
-                ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).NumberFormat = "dd"
-                ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).Font.Bold = True
-                ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).Font.Color = vbWhite
-                ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).Interior.Color = RGB(39, 82, 140)
-                ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).HorizontalAlignment = xlCenter
-                With ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).Borders
-                    .LineStyle = xlContinuous
-                    .Weight = xlMedium
-                End With
-
-                ' Remplissage pour PLANNING METRE ET GEOMETRE
-                ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).Value = d
-                ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).NumberFormat = "dd"
-                ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).Font.Bold = True
-                ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).Font.Color = vbWhite
-                ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).Interior.Color = RGB(39, 82, 140)
-                ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).HorizontalAlignment = xlCenter
-                With ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).Borders
-                    .LineStyle = xlContinuous
-                    .Weight = xlMedium
-                End With
-
-                joursDansSemaine = joursDansSemaine + 1
-                j = j + 1
-            End If
-            d = d + 1
-        Loop
-        If joursDansSemaine = 0 Then Exit Do
-
-        ' Fusion des cellules semaine avec mise en forme
-        ws1.Range(ws1.Cells(LIGNE_SEMAINE_WS1, col), ws1.Cells(LIGNE_SEMAINE_WS1, col + joursDansSemaine - 1)).Merge
-        ws1.Cells(LIGNE_SEMAINE_WS1, col).Value = Format(joursSemaine(1), "dd-mmm")
-        ws1.Cells(LIGNE_SEMAINE_WS1, col).HorizontalAlignment = xlCenter
-        ws1.Cells(LIGNE_SEMAINE_WS1, col).Font.Bold = True
-        ws1.Cells(LIGNE_SEMAINE_WS1, col).Interior.Color = RGB(175, 61, 61)
-        ws1.Cells(LIGNE_SEMAINE_WS1, col).Font.Color = vbWhite
-        With ws1.Range(ws1.Cells(LIGNE_SEMAINE_WS1, col), ws1.Cells(LIGNE_SEMAINE_WS1, col + joursDansSemaine - 1)).Borders
-            .LineStyle = xlContinuous
-            .Weight = xlMedium
-        End With
-
-        ws2.Range(ws2.Cells(LIGNE_SEMAINE_WS2, col), ws2.Cells(LIGNE_SEMAINE_WS2, col + joursDansSemaine - 1)).Merge
-        ws2.Cells(LIGNE_SEMAINE_WS2, col).Value = Format(joursSemaine(1), "dd-mmm")
-        ws2.Cells(LIGNE_SEMAINE_WS2, col).HorizontalAlignment = xlCenter
-        ws2.Cells(LIGNE_SEMAINE_WS2, col).Font.Bold = True
-        ws2.Cells(LIGNE_SEMAINE_WS2, col).Interior.Color = RGB(175, 61, 61)
-        ws2.Cells(LIGNE_SEMAINE_WS2, col).Font.Color = vbWhite
-        With ws2.Range(ws2.Cells(LIGNE_SEMAINE_WS2, col), ws2.Cells(LIGNE_SEMAINE_WS2, col + joursDansSemaine - 1)).Borders
-            .LineStyle = xlContinuous
-            .Weight = xlMedium
-        End With
-
-        col = col + joursDansSemaine
-    Loop
-
-    ' --- Message de confirmation final ---
-    MsgBox "Planning généré sur les deux feuilles pour " & annee, vbInformation
 End Sub
