@@ -1,0 +1,168 @@
+Sub GenererPlanningDouble()
+    Dim ws1 As Worksheet, ws2 As Worksheet
+    Set ws1 = ThisWorkbook.Sheets("PLANNING AFFAIRES")
+    Set ws2 = ThisWorkbook.Sheets("PLANNING METRE ET GEOMETRE")
+
+    ' Lignes cibles pour chaque feuille :
+    Const COL_DEBUT As Long = 23   ' Colonne W (décalé de 1)
+    Const LIGNE_SEMAINE_WS1 As Long = 3
+    Const LIGNE_JOUR_WS1 As Long = 4
+    Const LIGNE_SEMAINE_WS2 As Long = 4
+    Const LIGNE_JOUR_WS2 As Long = 5
+
+    Dim annee As Integer
+    annee = InputBox("Année à générer (ex : 2025)", "Planning", Year(Date))
+    If annee < 1900 Or annee > 2100 Then MsgBox "Année invalide": Exit Sub
+
+    ' Nettoyage sur les deux feuilles
+    With ws1
+        .Range(.Cells(LIGNE_SEMAINE_WS1, COL_DEBUT), .Cells(LIGNE_SEMAINE_WS1, COL_DEBUT + 259)).UnMerge
+        .Range(.Cells(LIGNE_SEMAINE_WS1, COL_DEBUT), .Cells(LIGNE_SEMAINE_WS1, COL_DEBUT + 259)).Clear
+        .Range(.Cells(LIGNE_JOUR_WS1, COL_DEBUT), .Cells(LIGNE_JOUR_WS1, COL_DEBUT + 259)).UnMerge
+        .Range(.Cells(LIGNE_JOUR_WS1, COL_DEBUT), .Cells(LIGNE_JOUR_WS1, COL_DEBUT + 259)).Clear
+    End With
+    With ws2
+        .Range(.Cells(LIGNE_SEMAINE_WS2, COL_DEBUT), .Cells(LIGNE_SEMAINE_WS2, COL_DEBUT + 259)).UnMerge
+        .Range(.Cells(LIGNE_SEMAINE_WS2, COL_DEBUT), .Cells(LIGNE_SEMAINE_WS2, COL_DEBUT + 259)).Clear
+        .Range(.Cells(LIGNE_JOUR_WS2, COL_DEBUT), .Cells(LIGNE_JOUR_WS2, COL_DEBUT + 259)).UnMerge
+        .Range(.Cells(LIGNE_JOUR_WS2, COL_DEBUT), .Cells(LIGNE_JOUR_WS2, COL_DEBUT + 259)).Clear
+    End With
+
+    Dim premierJour As Date: premierJour = DateSerial(annee, 1, 1)
+    Dim dernierJour As Date: dernierJour = DateSerial(annee, 12, 31)
+    Dim col As Long: col = COL_DEBUT
+    Dim d As Date: d = premierJour
+
+    ' ----- GESTION PREMIERE SEMAINE PARTIELLE -----
+    Dim joursPremiereSemaine As Integer: joursPremiereSemaine = 0
+    Dim startSemaine As Date: startSemaine = d
+
+    Do While Weekday(d, vbMonday) > 5 And d <= dernierJour
+        d = d + 1
+    Loop
+    startSemaine = d
+
+    Dim jours(1 To 5) As Date
+    Dim i As Integer: i = 1
+    Do While d <= dernierJour And Weekday(d, vbMonday) <= 5 And i <= 5
+        jours(i) = d
+        ' -- PLANNING AFFAIRES
+        ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).Value = d
+        ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).NumberFormat = "dd"
+        ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).Font.Bold = True
+        ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).Font.Color = vbWhite
+        ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).Interior.Color = RGB(39, 82, 140)
+        ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).HorizontalAlignment = xlCenter
+        With ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).Borders
+            .LineStyle = xlContinuous
+            .Weight = xlMedium
+        End With
+
+        ' -- PLANNING METRE ET GEOMETRE
+        ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).Value = d
+        ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).NumberFormat = "dd"
+        ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).Font.Bold = True
+        ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).Font.Color = vbWhite
+        ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).Interior.Color = RGB(39, 82, 140)
+        ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).HorizontalAlignment = xlCenter
+        With ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).Borders
+            .LineStyle = xlContinuous
+            .Weight = xlMedium
+        End With
+
+        joursPremiereSemaine = joursPremiereSemaine + 1
+        d = d + 1
+        i = i + 1
+    Loop
+
+    ' Fusion semaine + en-tête
+    ws1.Range(ws1.Cells(LIGNE_SEMAINE_WS1, col), ws1.Cells(LIGNE_SEMAINE_WS1, col + joursPremiereSemaine - 1)).Merge
+    ws1.Cells(LIGNE_SEMAINE_WS1, col).Value = Format(jours(1), "dd-mmm")
+    ws1.Cells(LIGNE_SEMAINE_WS1, col).HorizontalAlignment = xlCenter
+    ws1.Cells(LIGNE_SEMAINE_WS1, col).Font.Bold = True
+    ws1.Cells(LIGNE_SEMAINE_WS1, col).Interior.Color = RGB(175, 61, 61)
+    ws1.Cells(LIGNE_SEMAINE_WS1, col).Font.Color = vbWhite
+    With ws1.Range(ws1.Cells(LIGNE_SEMAINE_WS1, col), ws1.Cells(LIGNE_SEMAINE_WS1, col + joursPremiereSemaine - 1)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlMedium
+    End With
+
+    ws2.Range(ws2.Cells(LIGNE_SEMAINE_WS2, col), ws2.Cells(LIGNE_SEMAINE_WS2, col + joursPremiereSemaine - 1)).Merge
+    ws2.Cells(LIGNE_SEMAINE_WS2, col).Value = Format(jours(1), "dd-mmm")
+    ws2.Cells(LIGNE_SEMAINE_WS2, col).HorizontalAlignment = xlCenter
+    ws2.Cells(LIGNE_SEMAINE_WS2, col).Font.Bold = True
+    ws2.Cells(LIGNE_SEMAINE_WS2, col).Interior.Color = RGB(175, 61, 61)
+    ws2.Cells(LIGNE_SEMAINE_WS2, col).Font.Color = vbWhite
+    With ws2.Range(ws2.Cells(LIGNE_SEMAINE_WS2, col), ws2.Cells(LIGNE_SEMAINE_WS2, col + joursPremiereSemaine - 1)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlMedium
+    End With
+
+    col = col + joursPremiereSemaine
+
+    ' ----------- BOUCLE SEMAINES COMPLETES -----------
+    Do While d <= dernierJour
+        Dim joursSemaine(1 To 5) As Date
+        Dim joursDansSemaine As Integer: joursDansSemaine = 0
+        Dim j As Integer: j = 1
+        Do While d <= dernierJour And joursDansSemaine < 5
+            If Weekday(d, vbMonday) <= 5 Then
+                joursSemaine(j) = d
+
+                ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).Value = d
+                ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).NumberFormat = "dd"
+                ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).Font.Bold = True
+                ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).Font.Color = vbWhite
+                ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).Interior.Color = RGB(39, 82, 140)
+                ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).HorizontalAlignment = xlCenter
+                With ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).Borders
+                    .LineStyle = xlContinuous
+                    .Weight = xlMedium
+                End With
+
+                ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).Value = d
+                ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).NumberFormat = "dd"
+                ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).Font.Bold = True
+                ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).Font.Color = vbWhite
+                ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).Interior.Color = RGB(39, 82, 140)
+                ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).HorizontalAlignment = xlCenter
+                With ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).Borders
+                    .LineStyle = xlContinuous
+                    .Weight = xlMedium
+                End With
+
+                joursDansSemaine = joursDansSemaine + 1
+                j = j + 1
+            End If
+            d = d + 1
+        Loop
+        If joursDansSemaine = 0 Then Exit Do
+
+        ws1.Range(ws1.Cells(LIGNE_SEMAINE_WS1, col), ws1.Cells(LIGNE_SEMAINE_WS1, col + joursDansSemaine - 1)).Merge
+        ws1.Cells(LIGNE_SEMAINE_WS1, col).Value = Format(joursSemaine(1), "dd-mmm")
+        ws1.Cells(LIGNE_SEMAINE_WS1, col).HorizontalAlignment = xlCenter
+        ws1.Cells(LIGNE_SEMAINE_WS1, col).Font.Bold = True
+        ws1.Cells(LIGNE_SEMAINE_WS1, col).Interior.Color = RGB(175, 61, 61)
+        ws1.Cells(LIGNE_SEMAINE_WS1, col).Font.Color = vbWhite
+        With ws1.Range(ws1.Cells(LIGNE_SEMAINE_WS1, col), ws1.Cells(LIGNE_SEMAINE_WS1, col + joursDansSemaine - 1)).Borders
+            .LineStyle = xlContinuous
+            .Weight = xlMedium
+        End With
+
+        ws2.Range(ws2.Cells(LIGNE_SEMAINE_WS2, col), ws2.Cells(LIGNE_SEMAINE_WS2, col + joursDansSemaine - 1)).Merge
+        ws2.Cells(LIGNE_SEMAINE_WS2, col).Value = Format(joursSemaine(1), "dd-mmm")
+        ws2.Cells(LIGNE_SEMAINE_WS2, col).HorizontalAlignment = xlCenter
+        ws2.Cells(LIGNE_SEMAINE_WS2, col).Font.Bold = True
+        ws2.Cells(LIGNE_SEMAINE_WS2, col).Interior.Color = RGB(175, 61, 61)
+        ws2.Cells(LIGNE_SEMAINE_WS2, col).Font.Color = vbWhite
+        With ws2.Range(ws2.Cells(LIGNE_SEMAINE_WS2, col), ws2.Cells(LIGNE_SEMAINE_WS2, col + joursDansSemaine - 1)).Borders
+            .LineStyle = xlContinuous
+            .Weight = xlMedium
+        End With
+
+        col = col + joursDansSemaine
+    Loop
+
+    MsgBox "Planning généré sur les deux feuilles pour " & annee, vbInformation
+End Sub
+
