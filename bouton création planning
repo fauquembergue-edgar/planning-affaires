@@ -1,20 +1,22 @@
 Sub GenererPlanningDouble()
+    ' --- Initialisation des deux feuilles de planning concernées ---
     Dim ws1 As Worksheet, ws2 As Worksheet
     Set ws1 = ThisWorkbook.Sheets("PLANNING AFFAIRES")
     Set ws2 = ThisWorkbook.Sheets("PLANNING METRE ET GEOMETRE")
 
-    ' Lignes cibles pour chaque feuille :
-    Const COL_DEBUT As Long = 23   ' Colonne W (décalé de 1)
+    ' --- Déclaration des constantes pour repérer les lignes et colonnes clés dans les deux feuilles ---
+    Const COL_DEBUT As Long = 23   ' Colonne W = 23 (point de départ des colonnes à remplir)
     Const LIGNE_SEMAINE_WS1 As Long = 3
     Const LIGNE_JOUR_WS1 As Long = 4
     Const LIGNE_SEMAINE_WS2 As Long = 4
     Const LIGNE_JOUR_WS2 As Long = 5
 
+    ' --- Saisie de l’année par l’utilisateur avec contrôle de validité ---
     Dim annee As Integer
     annee = InputBox("Année à générer (ex : 2025)", "Planning", Year(Date))
     If annee < 1900 Or annee > 2100 Then MsgBox "Année invalide": Exit Sub
 
-    ' Nettoyage sur les deux feuilles
+    ' --- Suppression des anciennes données (nettoyage des lignes semaine/jour) ---
     With ws1
         .Range(.Cells(LIGNE_SEMAINE_WS1, COL_DEBUT), .Cells(LIGNE_SEMAINE_WS1, COL_DEBUT + 259)).UnMerge
         .Range(.Cells(LIGNE_SEMAINE_WS1, COL_DEBUT), .Cells(LIGNE_SEMAINE_WS1, COL_DEBUT + 259)).Clear
@@ -28,25 +30,27 @@ Sub GenererPlanningDouble()
         .Range(.Cells(LIGNE_JOUR_WS2, COL_DEBUT), .Cells(LIGNE_JOUR_WS2, COL_DEBUT + 259)).Clear
     End With
 
+    ' --- Définition de la plage de dates à générer ---
     Dim premierJour As Date: premierJour = DateSerial(annee, 1, 1)
     Dim dernierJour As Date: dernierJour = DateSerial(annee, 12, 31)
     Dim col As Long: col = COL_DEBUT
     Dim d As Date: d = premierJour
 
-    ' ----- GESTION PREMIERE SEMAINE PARTIELLE -----
+    ' --- Gestion de la première semaine partielle (si l’année ne commence pas un lundi) ---
     Dim joursPremiereSemaine As Integer: joursPremiereSemaine = 0
     Dim startSemaine As Date: startSemaine = d
-
     Do While Weekday(d, vbMonday) > 5 And d <= dernierJour
         d = d + 1
     Loop
     startSemaine = d
 
+    ' --- Remplissage des 5 premiers jours ouvrés (lundi à vendredi) ---
     Dim jours(1 To 5) As Date
     Dim i As Integer: i = 1
     Do While d <= dernierJour And Weekday(d, vbMonday) <= 5 And i <= 5
         jours(i) = d
-        ' -- PLANNING AFFAIRES
+
+        ' Remplissage visuel et mise en forme dans PLANNING AFFAIRES
         ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).Value = d
         ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).NumberFormat = "dd"
         ws1.Cells(LIGNE_JOUR_WS1, col + i - 1).Font.Bold = True
@@ -58,7 +62,7 @@ Sub GenererPlanningDouble()
             .Weight = xlMedium
         End With
 
-        ' -- PLANNING METRE ET GEOMETRE
+        ' Même chose dans PLANNING METRE ET GEOMETRE
         ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).Value = d
         ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).NumberFormat = "dd"
         ws2.Cells(LIGNE_JOUR_WS2, col + i - 1).Font.Bold = True
@@ -75,7 +79,7 @@ Sub GenererPlanningDouble()
         i = i + 1
     Loop
 
-    ' Fusion semaine + en-tête
+    ' --- Fusion des cellules semaine (en-tête semaine) pour la 1ère semaine partielle ---
     ws1.Range(ws1.Cells(LIGNE_SEMAINE_WS1, col), ws1.Cells(LIGNE_SEMAINE_WS1, col + joursPremiereSemaine - 1)).Merge
     ws1.Cells(LIGNE_SEMAINE_WS1, col).Value = Format(jours(1), "dd-mmm")
     ws1.Cells(LIGNE_SEMAINE_WS1, col).HorizontalAlignment = xlCenter
@@ -87,6 +91,7 @@ Sub GenererPlanningDouble()
         .Weight = xlMedium
     End With
 
+    ' Idem pour la deuxième feuille
     ws2.Range(ws2.Cells(LIGNE_SEMAINE_WS2, col), ws2.Cells(LIGNE_SEMAINE_WS2, col + joursPremiereSemaine - 1)).Merge
     ws2.Cells(LIGNE_SEMAINE_WS2, col).Value = Format(jours(1), "dd-mmm")
     ws2.Cells(LIGNE_SEMAINE_WS2, col).HorizontalAlignment = xlCenter
@@ -100,7 +105,7 @@ Sub GenererPlanningDouble()
 
     col = col + joursPremiereSemaine
 
-    ' ----------- BOUCLE SEMAINES COMPLETES -----------
+    ' --------- Boucle sur les semaines complètes de l’année ---------
     Do While d <= dernierJour
         Dim joursSemaine(1 To 5) As Date
         Dim joursDansSemaine As Integer: joursDansSemaine = 0
@@ -109,6 +114,7 @@ Sub GenererPlanningDouble()
             If Weekday(d, vbMonday) <= 5 Then
                 joursSemaine(j) = d
 
+                ' Remplissage pour PLANNING AFFAIRES
                 ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).Value = d
                 ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).NumberFormat = "dd"
                 ws1.Cells(LIGNE_JOUR_WS1, col + j - 1).Font.Bold = True
@@ -120,6 +126,7 @@ Sub GenererPlanningDouble()
                     .Weight = xlMedium
                 End With
 
+                ' Remplissage pour PLANNING METRE ET GEOMETRE
                 ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).Value = d
                 ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).NumberFormat = "dd"
                 ws2.Cells(LIGNE_JOUR_WS2, col + j - 1).Font.Bold = True
@@ -138,6 +145,7 @@ Sub GenererPlanningDouble()
         Loop
         If joursDansSemaine = 0 Then Exit Do
 
+        ' Fusion des cellules semaine avec mise en forme
         ws1.Range(ws1.Cells(LIGNE_SEMAINE_WS1, col), ws1.Cells(LIGNE_SEMAINE_WS1, col + joursDansSemaine - 1)).Merge
         ws1.Cells(LIGNE_SEMAINE_WS1, col).Value = Format(joursSemaine(1), "dd-mmm")
         ws1.Cells(LIGNE_SEMAINE_WS1, col).HorizontalAlignment = xlCenter
@@ -163,6 +171,6 @@ Sub GenererPlanningDouble()
         col = col + joursDansSemaine
     Loop
 
+    ' --- Message de confirmation final ---
     MsgBox "Planning généré sur les deux feuilles pour " & annee, vbInformation
 End Sub
-
