@@ -1,16 +1,20 @@
 Sub AjouterArretSurPlanningAffaires()
-    Const FEUILLE_PLANNING As String = "PLANNING AFFAIRES"
-    Const COL_NOM As Long = 11           ' Colonne J -> K (décalé +1)
-    Const COL_DEBUT_COULEUR As Long = 5  ' Colonne D -> E (décalé +1)
-    Const COL_FIN_COULEUR As Long = 7    ' Colonne F -> G (décalé +1)
-    Const HEADER_ROW As Long = 4
-    Const START_COL_PLANNING As Long = 23 ' Colonne V -> W (décalé +1)
-    Const END_COL_PLANNING As Long = 283  ' Colonne JZ -> KA (décalé +1)
 
+    ' === Définition des constantes (feuille, colonnes importantes) ===
+    Const FEUILLE_PLANNING As String = "PLANNING AFFAIRES"
+    Const COL_NOM As Long = 11           ' Colonne contenant le nom des salariés (colonne K)
+    Const COL_DEBUT_COULEUR As Long = 5  ' Début des colonnes contenant les couleurs (colonne E)
+    Const COL_FIN_COULEUR As Long = 7    ' Fin des colonnes contenant les couleurs (colonne G)
+    Const HEADER_ROW As Long = 4         ' Ligne où se trouvent les dates dans le planning
+    Const START_COL_PLANNING As Long = 23 ' Première colonne du planning (colonne W)
+    Const END_COL_PLANNING As Long = 283  ' Dernière colonne du planning (colonne KA)
+
+    ' === Initialisation de la feuille et des variables ===
     Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(FEUILLE_PLANNING)
     Dim r As Long
 
-    ' 1. Recherche de la ligne repère dans colonne K
+    ' === 1. Recherche de la ligne contenant la mention "CONGES / RTT ..." ===
+    ' On parcourt la colonne K jusqu'à trouver le texte repère
     Dim ligneRepere As Long: ligneRepere = 0
     Dim REPERE As String: REPERE = "CONGES   /   R.T.T.   /   FORMATIONS   /   ABSENCES …"
     For r = 1 To ws.UsedRange.Rows.Count
@@ -24,13 +28,13 @@ Sub AjouterArretSurPlanningAffaires()
         Exit Sub
     End If
 
-    ' 2. Avancer jusqu'à la première ligne non vide après repère
+    ' === 2. Avance jusqu’à la première ligne non vide (premier salarié) ===
     Dim ligneDebut As Long: ligneDebut = ligneRepere + 1
     Do While Trim(ws.Cells(ligneDebut, COL_NOM).Value) = "" And ligneDebut < ws.Rows.Count
         ligneDebut = ligneDebut + 1
     Loop
 
-    ' 3. Liste dynamique des salariés + couleurs
+    ' === 3. Création des listes dynamiques des noms + couleurs associées ===
     Dim lastRow As Long: lastRow = ws.Cells(ws.Rows.Count, COL_NOM).End(xlUp).row
     Dim personnesDyn() As String, couleursDyn() As Long, policesDyn() As Long
     Dim nPers As Long: nPers = 0
@@ -42,7 +46,7 @@ Sub AjouterArretSurPlanningAffaires()
             ReDim Preserve couleursDyn(1 To nPers)
             ReDim Preserve policesDyn(1 To nPers)
             personnesDyn(nPers) = ws.Cells(r, COL_NOM).Value
-            ' Prend la couleur et police sur la première cellule fusionnée E/F/G trouvée non vide
+            ' On récupère couleur de fond et couleur de police sur les cellules fusionnées E/F/G
             Dim c As Long
             For c = COL_DEBUT_COULEUR To COL_FIN_COULEUR
                 If ws.Cells(r, c).MergeCells Then
@@ -59,8 +63,9 @@ Sub AjouterArretSurPlanningAffaires()
         Exit Sub
     End If
 
-    ' 4. Saisie de l'utilisateur
-    ' -- Choix du salarié
+    ' === 4. Saisie de l'utilisateur : salarié, type d'arrêt et dates ===
+
+    ' -- Choix du salarié --
     Dim txt As String: txt = "Sélectionner la personne à modifier :" & vbCrLf
     Dim i As Integer
     For i = 1 To nPers
@@ -70,7 +75,7 @@ Sub AjouterArretSurPlanningAffaires()
     choixPers = Application.InputBox(txt, "Choix du salarié", Type:=1)
     If choixPers < 1 Or choixPers > nPers Then Exit Sub
 
-    ' -- Choix du type d'arrêt
+    ' -- Choix du type d'arrêt --
     Dim typesArret As Variant
     typesArret = Array("CC", "CP", "AM", "F", "RTT")
     txt = "Sélectionner le type d'arrêt à poser :" & vbCrLf
@@ -81,7 +86,7 @@ Sub AjouterArretSurPlanningAffaires()
     choixArret = Application.InputBox(txt, "Type d'arrêt", Type:=1)
     If choixArret < 1 Or choixArret > UBound(typesArret) + 1 Then Exit Sub
 
-    ' -- Dates
+    ' -- Dates de début et fin d’arrêt --
     Dim dateDeb As Variant, dateFin As Variant
     dateDeb = Application.InputBox("Date de début de l'arrêt (JJ/MM/AAAA)", "Date début", Type:=2)
     If Not IsDate(dateDeb) Then Exit Sub
@@ -91,7 +96,7 @@ Sub AjouterArretSurPlanningAffaires()
     dateFin = CDate(dateFin)
     If dateFin < dateDeb Then MsgBox "Date de fin antérieure à la date de début !": Exit Sub
 
-    ' 5. Recherche ligne du salarié à partir de la liste dynamique
+    ' === 5. Recherche de la ligne du salarié dans la feuille ===
     Dim lignePers As Long: lignePers = 0
     For r = ligneDebut To lastRow
         If Trim(ws.Cells(r, COL_NOM).Value) = personnesDyn(choixPers) Then
@@ -101,7 +106,7 @@ Sub AjouterArretSurPlanningAffaires()
     Next r
     If lignePers = 0 Then MsgBox "Salarié introuvable !": Exit Sub
 
-    ' 6. Trouver les colonnes planning à colorier
+    ' === 6. Détermination des colonnes de planning correspondant aux dates ===
     Dim colDeb As Long: colDeb = 0
     Dim colFin As Long: colFin = 0
     For i = START_COL_PLANNING To END_COL_PLANNING
@@ -114,13 +119,14 @@ Sub AjouterArretSurPlanningAffaires()
     Next i
     If colDeb = 0 Or colFin = 0 Then MsgBox "Dates hors planning !": Exit Sub
 
-    ' 7. Appliquer code arrêt, couleur de fond ET couleur de police !
+    ' === 7. Écriture dans le planning : code d’arrêt + couleurs ===
     For i = colDeb To colFin
         ws.Cells(lignePers, i).Value = typesArret(choixArret - 1)
         ws.Cells(lignePers, i).Interior.Color = couleursDyn(choixPers)
         ws.Cells(lignePers, i).Font.Color = policesDyn(choixPers)
     Next i
 
+    ' === Message de confirmation final ===
     MsgBox "Arrêt '" & typesArret(choixArret - 1) & "' posé pour '" & personnesDyn(choixPers) & "' du " & Format(dateDeb, "dd/mm/yyyy") & " au " & Format(dateFin, "dd/mm/yyyy")
-End Sub
 
+End Sub
