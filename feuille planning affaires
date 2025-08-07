@@ -1,12 +1,14 @@
 Option Explicit
-' Renvoie TRUE si uneDate est un jour férié français
+
+' === Fonction : Vérifie si une date est un jour férié en France ===
 Private Function EstJourFerieFrance(ByVal uneDate As Date) As Boolean
+    ' Déclaration des variables
     Dim joursFeries() As Date
     Dim an As Integer: an = Year(uneDate)
     Dim paques As Date: paques = DatePaques(an)
     Dim i As Integer
 
-    ' Tableau de base des jours fériés fixes + Pâques, Ascension, Pentecôte
+    ' Création d'un tableau contenant les jours fériés (fixes + mobiles)
     ReDim joursFeries(0 To 10)
     joursFeries(0) = DateSerial(an, 1, 1)      ' Jour de l'an
     joursFeries(1) = paques + 1                ' Lundi de Pâques
@@ -17,9 +19,10 @@ Private Function EstJourFerieFrance(ByVal uneDate As Date) As Boolean
     joursFeries(6) = DateSerial(an, 7, 14)     ' Fête nationale
     joursFeries(7) = DateSerial(an, 8, 15)     ' Assomption
     joursFeries(8) = DateSerial(an, 11, 1)     ' Toussaint
-    joursFeries(9) = DateSerial(an, 11, 11)    ' Armistice 1918
+    joursFeries(9) = DateSerial(an, 11, 11)    ' Armistice
     joursFeries(10) = DateSerial(an, 12, 25)   ' Noël
 
+    ' Vérifie si la date passée en paramètre correspond à un jour férié
     For i = 0 To UBound(joursFeries)
         If uneDate = joursFeries(i) Then
             EstJourFerieFrance = True
@@ -29,11 +32,13 @@ Private Function EstJourFerieFrance(ByVal uneDate As Date) As Boolean
     EstJourFerieFrance = False
 End Function
 
-' Calcul la date de Pâques (méthode de Oudin)
+' === Fonction : Calcule la date de Pâques (algorithme de Oudin) ===
 Private Function DatePaques(ByVal an As Integer) As Date
     Dim G As Integer, c As Integer, H As Integer
     Dim i As Integer, j As Integer, l As Integer
     Dim mois As Integer, jour As Integer
+
+    ' Calcul intermédiaire basé sur l’année pour trouver la date de Pâques
     G = an Mod 19
     c = an \ 100
     H = (c - c \ 4 - ((8 * c + 13) \ 25) + 19 * G + 15) Mod 30
@@ -42,30 +47,35 @@ Private Function DatePaques(ByVal an As Integer) As Date
     l = i - j
     mois = 3 + (l + 40) \ 44
     jour = l + 28 - 31 * (mois \ 4)
+
+    ' Retourne la date calculée
     DatePaques = DateSerial(an, mois, jour)
 End Function
 
+' === Gestion automatique de la feuille lors d’une modification ===
 Private Sub Worksheet_Change(ByVal Target As Range)
-    Const COL_ID As Long = 286   ' JZ devient KZ (=287, car tout est décalé d'une colonne)
+    Const COL_ID As Long = 286   ' Colonne contenant les IDs uniques
     Dim wsSource As Worksheet: Set wsSource = Me
 
+    ' Sortie si la cellule modifiée est en dehors du tableau
     If Target.Cells.Count > 1 Then Exit Sub
-    If Target.row < 5 Then Exit Sub
+    If Target.Row < 5 Then Exit Sub
 
     On Error GoTo Cleanup
     Application.EnableEvents = False
 
-    ' --- TRI AUTO par date colonne L (12)
+    ' --- Tri automatique sur la colonne date (colonne L = 12) ---
     If Target.Column = 12 Then
         Dim wsTri As Worksheet: Set wsTri = Me
-        Dim lastRowTri As Long
-        Dim ligneRepere As Long
+        Dim lastRowTri As Long, ligneRepere As Long
         Dim REPERE As String: REPERE = "CONGES   /   R.T.T.   /   FORMATIONS   /   ABSENCES …"
 
+        ' Recherche du repère de séparation pour le tri
         For ligneRepere = 6 To wsTri.Rows.Count
             If Trim(wsTri.Cells(ligneRepere, 11).Value) = REPERE Then Exit For
         Next ligneRepere
 
+        ' Applique le tri si la ligne repère est trouvée correctement
         If ligneRepere > 6 And ligneRepere < wsTri.Rows.Count Then
             lastRowTri = ligneRepere - 2
             Dim lastColTri As Long
@@ -85,12 +95,12 @@ Private Sub Worksheet_Change(ByVal Target As Range)
         End If
     End If
 
-    ' --- Coloration si Chargé d’étude modifié ---
+    ' --- Applique la couleur du chargé d'étude si elle est déjà utilisée ailleurs ---
     If Target.Column = 5 Then
         Dim vEdit As String: vEdit = Trim(Target.Value)
         If vEdit <> "" Then
             Dim lastL As Long, r As Long, c As Long, match As Boolean
-            lastL = wsSource.Cells(wsSource.Rows.Count, 5).End(xlUp).row
+            lastL = wsSource.Cells(wsSource.Rows.Count, 5).End(xlUp).Row
             match = False
             For r = 12 To lastL
                 For c = 5 To 7
@@ -113,49 +123,49 @@ Private Sub Worksheet_Change(ByVal Target As Range)
         End If
     End If
 
-    ' --- Générer un ID si vide ---
+    ' --- Génère un nouvel ID unique s’il est manquant ---
     If Target.Column <> COL_ID Then
-        With wsSource.Cells(Target.row, COL_ID)
+        With wsSource.Cells(Target.Row, COL_ID)
             If Trim(.Value) = "" Then
                 .Value = Mid$(CreateObject("Scriptlet.TypeLib").GUID, 2, 36)
             End If
         End With
     End If
 
-    ' --- Sync valeur + mise en forme vers autres feuilles ---
+    ' --- Synchronise les valeurs et formats vers les autres feuilles ---
     If Target.Column <> COL_ID Then
         SyncToOtherSheets Target, wsSource, COL_ID
     End If
 
-    ' --- Métrés ---
+    ' --- Gestion spécifique de la colonne Métrés ---
     If Target.Column = 18 Then
         HandleMetresChange Target, wsSource, COL_ID
 
-    ' --- Envoi DR ---
+    ' --- Gestion du champ "ENVOI DR" (colonne A) ---
     ElseIf Target.Column = 1 Then
         HandleEnvoiDRChange Target, wsSource, COL_ID
 
-    ' --- Suivi des études ---
+    ' --- Gestion du champ "SUIVI DES ETUDES" (colonne B) ---
     ElseIf Target.Column = 2 Then
         HandleSuiviDesEtudesChange Target, wsSource, COL_ID
 
-    ' --- Coloration planning (PLANNING AFFAIRES / METRE GEOMETRE) ---
+    ' --- Recoloration du planning si modification de date ou chargé d'étude ---
     ElseIf Target.Column = 12 Or Target.Column = 5 Then
-        SynchroniseCasePlanning Target.row
+        SynchroniseCasePlanning Target.Row
     End If
 
-    ' --- Chargé d’étude EXC ---
+    ' --- Cas particulier pour chargé d’étude "exc" ---
     If Target.Column = 5 Then
         GérerChargéEtudeExc Target
     End If
 
-    ' --- ? Si colonne K (11) modifiée = date ? Mettre à jour couleurs dans SUIVI DES ETUDES
+    ' --- Mise à jour de la couleur dans "SUIVI DES ETUDES" si modification de date (colonne K = 11) ---
     If Target.Column = 11 Then
         Dim wsSDE As Worksheet: Set wsSDE = ThisWorkbook.Sheets("SUIVI DES ETUDES")
         Dim dModif As Date
         If IsDate(Target.Value) Then dModif = DateValue(Target.Value) Else GoTo Cleanup
 
-        ' Trouver colonne correspondante dans ligne 4
+        ' Recherche de la colonne correspondant à cette date dans la ligne 4
         Dim colPA As Long
         For colPA = 1 To wsSource.Columns.Count
             If IsDate(wsSource.Cells(4, colPA).Value) Then
@@ -164,21 +174,21 @@ Private Sub Worksheet_Change(ByVal Target As Range)
         Next colPA
         If colPA > wsSource.Columns.Count Then GoTo Cleanup
 
-        ' Trouver ligne repère
+        ' Recherche de la ligne repère
         Dim repRow As Long
         For repRow = 1 To wsSource.Rows.Count
             If Trim(wsSource.Cells(repRow, 11).Value) = "CONGES   /   R.T.T.   /   FORMATIONS   /   ABSENCES …" Then Exit For
         Next repRow
         If repRow = 0 Then GoTo Cleanup
 
-        ' Parcours lignes SDE pour maj des couleurs si même date
+        ' Mise à jour des couleurs dans SUIVI DES ETUDES si date correspondante trouvée
         Dim ligneSDE As Long
-        For ligneSDE = 7 To wsSDE.Cells(wsSDE.Rows.Count, 5).End(xlUp).row
+        For ligneSDE = 7 To wsSDE.Cells(wsSDE.Rows.Count, 5).End(xlUp).Row
             If IsDate(wsSDE.Cells(ligneSDE, 5).Value) Then
                 If DateValue(wsSDE.Cells(ligneSDE, 5).Value) = dModif Then
-                    Dim destCol As Long: destCol = 24 ' Colonne X
+                    Dim destCol As Long: destCol = 24 ' Commence en colonne X
                     Dim rPA As Long
-                    For rPA = repRow + 1 To wsSource.Cells(wsSource.Rows.Count, colPA).End(xlUp).row
+                    For rPA = repRow + 1 To wsSource.Cells(wsSource.Rows.Count, colPA).End(xlUp).Row
                         If destCol > 27 Then Exit For
                         With wsSource.Cells(rPA, colPA)
                             If .Interior.Color <> RGB(255, 255, 255) And .Interior.Pattern <> xlNone Then
@@ -198,29 +208,34 @@ Cleanup:
     Application.EnableEvents = True
 End Sub
 
-'------------------------------
-' 1) Recopie valeur + mise en forme sur toutes les feuilles
-'------------------------------
+' Cette procédure synchronise les données d'une cellule (Target)
+' vers les autres feuilles du classeur, en fonction de l'ID de la ligne.
 Public Sub SyncToOtherSheets( _
         ByVal Target As Range, _
         ByVal wsSource As Worksheet, _
         ByVal COL_ID As Long)
 
+    ' Récupère l'ID unique de la ligne (depuis la colonne COL_ID)
     Dim id       As String: id = Trim(CStr(wsSource.Cells(Target.row, COL_ID).Value))
-    If id = "" Then Exit Sub
+    If id = "" Then Exit Sub  ' Si aucun ID, on quitte
 
     Dim ws       As Worksheet
     Dim r        As Long
     Dim lastRow  As Long
     Dim dstCol   As Long
 
+    ' Parcourt toutes les feuilles du classeur sauf celle d'origine
     For Each ws In ThisWorkbook.Worksheets
         If ws.CodeName <> wsSource.CodeName Then
             lastRow = ws.Cells(ws.Rows.Count, COL_ID).End(xlUp).row
+
+            ' Recherche l'ID dans la feuille cible
             For r = 5 To lastRow
                 If Trim(CStr(ws.Cells(r, COL_ID).Value)) = id Then
+                    ' Détermine la colonne cible dans la feuille
                     dstCol = GetDestCol(ws.Name, Target.Column)
                     If dstCol > 0 Then
+                        ' Applique la valeur et la mise en forme selon la feuille
                         With ws.Cells(r, dstCol)
                             .Value = Target.Value
                             If ws.Name = "ENVOI DR" Then
@@ -231,7 +246,7 @@ Public Sub SyncToOtherSheets( _
                                 .Font.Color = Target.Font.Color
                             Else
                                 If dstCol = 21 And LCase(.Value) = "exc" Then
-                                    .Interior.Color = RGB(255, 255, 153)
+                                    .Interior.Color = RGB(255, 255, 153) ' Jaune pour "exc"
                                 Else
                                     .Interior.Color = Target.Interior.Color
                                 End If
@@ -241,7 +256,8 @@ Public Sub SyncToOtherSheets( _
                     End If
                 End If
             Next r
-            ' Correction finale : assure couleur jaune partout où "Exc" apparaît en U (sauf ENVOI DR)
+
+            ' Applique la couleur jaune pour toutes les valeurs "exc" dans la colonne U
             If ws.Name <> "ENVOI DR" Then
                 For r = 5 To lastRow
                     If LCase(ws.Cells(r, 21).Value) = "exc" Then
@@ -253,32 +269,38 @@ Public Sub SyncToOtherSheets( _
     Next ws
 End Sub
 
+' Cette fonction retourne la colonne de destination (dans une autre feuille)
+' en fonction de la feuille et de la colonne source modifiée.
 Private Function GetDestCol(wsName As String, srcCol As Long) As Long
     Select Case wsName
+
         Case "PLANNING METRE ET GEOMETRE"
+            ' Mapping des colonnes (source vers cible) pour cette feuille
             Select Case srcCol
-                Case 3:   GetDestCol = 1    ' C -> A
-                Case 4:   GetDestCol = 2    ' D -> B
-                Case 5:   GetDestCol = 3    ' E -> C
-                Case 6:   GetDestCol = 4    ' F -> D
-                Case 7:   GetDestCol = 5    ' G -> E
-                Case 8:   GetDestCol = 6    ' H -> F
-                Case 9:   GetDestCol = 7    ' I -> G
-                Case 10:  GetDestCol = 8    ' J -> H
-                Case 11:  GetDestCol = 9    ' K -> I
-                Case 12:  GetDestCol = 10   ' L -> J
-                Case 13:  GetDestCol = 11   ' M -> K
-                Case 15:  GetDestCol = 12   ' O -> L
-                Case 16:  GetDestCol = 13   ' P -> M
-                Case 17:  GetDestCol = 14   ' Q -> N
-                Case 18:  GetDestCol = 15   ' R -> O
-                Case 20:  GetDestCol = 19   ' T -> Q
-                Case 21:  GetDestCol = 20   ' U -> R
-                Case 22:  GetDestCol = 21   ' V -> S
-                Case 287: GetDestCol = 287  ' KZ
+                Case 3:   GetDestCol = 1
+                Case 4:   GetDestCol = 2
+                Case 5:   GetDestCol = 3
+                Case 6:   GetDestCol = 4
+                Case 7:   GetDestCol = 5
+                Case 8:   GetDestCol = 6
+                Case 9:   GetDestCol = 7
+                Case 10:  GetDestCol = 8
+                Case 11:  GetDestCol = 9
+                Case 12:  GetDestCol = 10
+                Case 13:  GetDestCol = 11
+                Case 15:  GetDestCol = 12
+                Case 16:  GetDestCol = 13
+                Case 17:  GetDestCol = 14
+                Case 18:  GetDestCol = 15
+                Case 20:  GetDestCol = 19
+                Case 21:  GetDestCol = 20
+                Case 22:  GetDestCol = 21
+                Case 287: GetDestCol = 287
                 Case Else: GetDestCol = 0
             End Select
+
         Case "ENVOI DR"
+            ' Mapping spécifique pour la feuille ENVOI DR
             Select Case srcCol
                 Case 7:   GetDestCol = 2
                 Case 15:  GetDestCol = 8
@@ -295,24 +317,27 @@ Private Function GetDestCol(wsName As String, srcCol As Long) As Long
                 Case 287: GetDestCol = 287
                 Case Else: GetDestCol = 0
             End Select
+
         Case "SUIVI DES ETUDES"
+            ' Mapping spécifique pour la feuille SUIVI DES ETUDES
             Select Case srcCol
-                Case 10: GetDestCol = 2    ' J -> B
-                Case 11: GetDestCol = 3    ' K -> C
-                Case 5:  GetDestCol = 4    ' E -> D
-                Case 12: GetDestCol = 5    ' L -> E
-                Case 13: GetDestCol = 6    ' M -> F
-                Case 287: GetDestCol = 20  ' KZ (on le colle en colonne T pour suivi, à adapter)
+                Case 10: GetDestCol = 2
+                Case 11: GetDestCol = 3
+                Case 5:  GetDestCol = 4
+                Case 12: GetDestCol = 5
+                Case 13: GetDestCol = 6
+                Case 287: GetDestCol = 20
                 Case Else: GetDestCol = 0
             End Select
+
         Case Else
+            ' Si pas de correspondance, on retourne la même colonne que source
             GetDestCol = srcCol
     End Select
 End Function
 
-'------------------------------
-' 2) Ajout/Suppression dans PLANNING MÉTRÉ ET GÉOMÈTRE (décalé +1)
-'------------------------------
+' Cette procédure gère les ajouts/suppressions dans la feuille "PLANNING METRE ET GEOMETRE"
+' en fonction des modifications dans la colonne des métrés.
 Private Sub HandleMetresChange( _
         ByVal Target As Range, _
         ByVal wsSource As Worksheet, _
@@ -326,7 +351,7 @@ Private Sub HandleMetresChange( _
     On Error GoTo Cleanup
     Application.EnableEvents = False
 
-    ' Suppression si vide ou "-"
+    ' --- Si vide ou "-", on supprime la ligne associée dans la feuille cible ---
     If val = "" Or val = "-" Then
         Dim i As Long, lastR As Long
         lastR = wsDest.Cells(wsDest.Rows.Count, COL_ID).End(xlUp).row
@@ -337,10 +362,11 @@ Private Sub HandleMetresChange( _
         GoTo Cleanup
     End If
 
+    ' --- Sinon, on ajoute une nouvelle ligne recopiée depuis la source ---
     Dim pasteRow As Long
     pasteRow = wsDest.Cells(wsDest.Rows.Count, 1).End(xlUp).row + 1
 
-    ' Colonnes à recopier (décalées) : 3,4,5,6,7,8,9,10,11,12,14,15,16,17,18,19,20,21,22
+    ' Colonnes à recopier depuis la source (décalées dans la cible)
     Dim cols As Variant: cols = Array(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22)
     Dim j As Long, cIdx As Variant, destCol As Long
     j = 1
@@ -362,8 +388,10 @@ Private Sub HandleMetresChange( _
         j = j + 1
     Next
 
+    ' Recopie aussi l'ID dans la feuille destination
     wsDest.Cells(pasteRow, COL_ID).Value = sourceID
 
+    ' Applique les bordures sur toute la ligne nouvellement insérée
     Dim lastColPM As Long
     lastColPM = wsDest.Cells(5, wsDest.Columns.Count).End(xlToLeft).Column
     Dim c As Long
@@ -374,30 +402,33 @@ Private Sub HandleMetresChange( _
         End With
     Next c
 
+    ' Colonne 12 spéciale : recopie la colonne 15 avec sa couleur
     With wsDest.Cells(pasteRow, 12)
         .Value = wsSource.Cells(srcRow, 15).Value
         .Interior.Color = wsSource.Cells(srcRow, 15).Interior.Color
     End With
 
+    ' Mise à jour de la couleur dans le planning
     Call SynchroniseCasePlanning(srcRow)
 
 Cleanup:
     Application.EnableEvents = True
 End Sub
 
-'------------------------------
-' 3) Ajout/Suppression dans ENVOI DR (décalé +1)
-'------------------------------
+' Cette procédure gère l’ajout ou la suppression d’une ligne dans la feuille "ENVOI DR"
+' en fonction de la valeur placée dans une cellule (par exemple un "x").
 Private Sub HandleEnvoiDRChange( _
         ByVal Target As Range, _
         ByVal wsSource As Worksheet, _
         ByVal COL_ID As Long)
 
+    ' Initialisation des variables : on récupère la ligne source, l'ID, et la valeur saisie (mise en minuscule)
     Dim wsDR    As Worksheet: Set wsDR = ThisWorkbook.Sheets("ENVOI DR")
     Dim srcRow  As Long:      srcRow = Target.row
     Dim val     As String:    val = LCase(Trim(Target.Value))
     Dim sourceID As String:   sourceID = Trim(wsSource.Cells(srcRow, COL_ID).Value)
 
+    ' --- Suppression d’une ligne existante avec le même ID dans ENVOI DR ---
     Dim lastR As Long, i As Long
     lastR = wsDR.Cells(wsDR.Rows.Count, COL_ID).End(xlUp).row
     For i = lastR To 8 Step -1
@@ -405,26 +436,28 @@ Private Sub HandleEnvoiDRChange( _
             wsDR.Rows(i).Delete
     Next i
 
+    ' --- Si on a mis "x", on recopie les données dans une nouvelle ligne ---
     If val = "x" Then
         Dim pasteRow As Long
         pasteRow = wsDR.Cells(wsDR.Rows.Count, 2).End(xlUp).row + 1
-        If pasteRow < 8 Then pasteRow = 8
+        If pasteRow < 8 Then pasteRow = 8 ' On commence à la ligne 8 minimum
 
-        wsDR.Cells(pasteRow, 10).Value = wsSource.Cells(srcRow, 17).Value
-        wsDR.Cells(pasteRow, 11).Value = wsSource.Cells(srcRow, 22).Value
-        wsDR.Cells(pasteRow, 8).Value = wsSource.Cells(srcRow, 15).Value
-        wsDR.Cells(pasteRow, 2).Value = wsSource.Cells(srcRow, 7).Value    ' Secteur
-        wsDR.Cells(pasteRow, 3).Value = wsSource.Cells(srcRow, 8).Value    ' MOA
-        wsDR.Cells(pasteRow, 4).Value = wsSource.Cells(srcRow, 9).Value    ' MOE
-        wsDR.Cells(pasteRow, 5).Value = wsSource.Cells(srcRow, 10).Value   ' Commune
-        wsDR.Cells(pasteRow, 6).Value = wsSource.Cells(srcRow, 11).Value   ' Désignation
-        wsDR.Cells(pasteRow, 7).Value = wsSource.Cells(srcRow, 12).Value   ' Date
-        wsDR.Cells(pasteRow, 9).Value = wsSource.Cells(srcRow, 16).Value   ' Qtés
-        wsDR.Cells(pasteRow, 12).Value = wsSource.Cells(srcRow, 3).Value   ' Type
-        wsDR.Cells(pasteRow, 16).Value = wsSource.Cells(srcRow, 4).Value   ' Intérêt
-        wsDR.Cells(pasteRow, COL_ID).Value = sourceID                      ' ID
-        
+        ' Recopie les données depuis la ligne source vers la feuille ENVOI DR
+        wsDR.Cells(pasteRow, 10).Value = wsSource.Cells(srcRow, 17).Value   ' Chantier
+        wsDR.Cells(pasteRow, 11).Value = wsSource.Cells(srcRow, 22).Value   ' Engin/Machine
+        wsDR.Cells(pasteRow, 8).Value = wsSource.Cells(srcRow, 15).Value    ' Désignation BL
+        wsDR.Cells(pasteRow, 2).Value = wsSource.Cells(srcRow, 7).Value     ' Secteur
+        wsDR.Cells(pasteRow, 3).Value = wsSource.Cells(srcRow, 8).Value     ' MOA
+        wsDR.Cells(pasteRow, 4).Value = wsSource.Cells(srcRow, 9).Value     ' MOE
+        wsDR.Cells(pasteRow, 5).Value = wsSource.Cells(srcRow, 10).Value    ' Commune
+        wsDR.Cells(pasteRow, 6).Value = wsSource.Cells(srcRow, 11).Value    ' Désignation
+        wsDR.Cells(pasteRow, 7).Value = wsSource.Cells(srcRow, 12).Value    ' Date
+        wsDR.Cells(pasteRow, 9).Value = wsSource.Cells(srcRow, 16).Value    ' Quantités
+        wsDR.Cells(pasteRow, 12).Value = wsSource.Cells(srcRow, 3).Value    ' Type
+        wsDR.Cells(pasteRow, 16).Value = wsSource.Cells(srcRow, 4).Value    ' Intérêt
+        wsDR.Cells(pasteRow, COL_ID).Value = sourceID                       ' ID unique
 
+        ' --- Mise en forme de la nouvelle ligne (couleur blanche, bordures, texte noir) ---
         Dim colDR As Long
         For colDR = 1 To 16
             With wsDR.Cells(pasteRow, colDR)
@@ -436,6 +469,8 @@ Private Sub HandleEnvoiDRChange( _
                 End With
             End With
         Next colDR
+
+        ' On applique aussi le style à la cellule contenant l’ID
         With wsDR.Cells(pasteRow, COL_ID)
             .Interior.ColorIndex = xlColorIndexNone
             .Font.Color = vbBlack
@@ -443,21 +478,21 @@ Private Sub HandleEnvoiDRChange( _
     End If
 End Sub
 
-'------------------------------
-' 4) Ajout/Suppression SUIVI DES ETUDES
-'------------------------------
+' Cette procédure gère la mise à jour automatique de la feuille "SUIVI DES ETUDES"
+' quand on coche ou décoche une case dans la colonne correspondante de la feuille source.
 Public Sub HandleSuiviDesEtudesChange( _
         ByVal Target As Range, _
         ByVal wsSource As Worksheet, _
         ByVal COL_ID As Long)
 
+    ' --- Initialisation de base : récupération des infos utiles ---
     Dim wsSDE As Worksheet: Set wsSDE = ThisWorkbook.Sheets("SUIVI DES ETUDES")
     Dim srcRow As Long: srcRow = Target.row
-    Dim val As String: val = LCase(Trim(Target.Value))
-    Dim sourceID As String: sourceID = Trim(wsSource.Cells(srcRow, COL_ID).Value)
+    Dim val As String: val = LCase(Trim(Target.Value)) ' Valeur entrée, en minuscule
+    Dim sourceID As String: sourceID = Trim(wsSource.Cells(srcRow, COL_ID).Value) ' Identifiant unique
     Dim c As Long
 
-    ' --- Suppression de l'ancienne ligne ---
+    ' --- Suppression d'une ancienne ligne dans SDE si même ID ---
     Dim lastR As Long, i As Long
     lastR = wsSDE.Cells(wsSDE.Rows.Count, 286).End(xlUp).row
     For i = lastR To 7 Step -1
@@ -466,12 +501,13 @@ Public Sub HandleSuiviDesEtudesChange( _
         End If
     Next i
 
-    ' --- Insertion si "x" ---
+    ' --- Si la valeur saisie est "x", on copie les infos dans SDE ---
     If val = "x" Then
         Dim pasteRow As Long
         pasteRow = 0
         Dim r As Long, ligneVide As Boolean
 
+        ' --- Recherche d'une ligne vide pour coller (ou dernière ligne dispo sinon) ---
         For r = 7 To wsSDE.Rows.Count
             If Application.CountA(wsSDE.Rows(r)) = 0 Then
                 ligneVide = True
@@ -492,6 +528,7 @@ Public Sub HandleSuiviDesEtudesChange( _
             pasteRow = wsSDE.Cells(wsSDE.Rows.Count, 2).End(xlUp).row + 1
         End If
 
+        ' --- Remplissage des valeurs principales dans les colonnes B à G (2 à 6) ---
         wsSDE.Cells(pasteRow, 2).Value2 = wsSource.Cells(srcRow, 10).Value2
         wsSDE.Cells(pasteRow, 3).Value2 = wsSource.Cells(srcRow, 11).Value2
         wsSDE.Cells(pasteRow, 4).Value2 = wsSource.Cells(srcRow, 5).Value2
@@ -499,10 +536,10 @@ Public Sub HandleSuiviDesEtudesChange( _
         wsSDE.Cells(pasteRow, 6).Value2 = wsSource.Cells(srcRow, 13).Value2
         wsSDE.Cells(pasteRow, 286).Value2 = wsSource.Cells(srcRow, 286).Value2
 
-        ' Formule "Semaine"
+        ' --- Génère automatiquement le texte de la semaine (colonne A) ---
         wsSDE.Cells(pasteRow, 1).Formula = "=CONCATENATE(""S"",WEEKNUM(E" & pasteRow & ",2))"
 
-        ' Mise en forme (couleurs)
+        ' --- Récupération des couleurs depuis la feuille source pour les colonnes 2 à 6 ---
         For c = 2 To 6
             With wsSDE.Cells(pasteRow, c)
                 .Interior.Color = wsSource.Cells(srcRow, c + 8).Interior.Color
@@ -510,6 +547,7 @@ Public Sub HandleSuiviDesEtudesChange( _
             End With
         Next c
 
+        ' --- Ajoute des bordures à toute la ligne collée ---
         For c = 1 To 27
             With wsSDE.Cells(pasteRow, c).Borders
                 .LineStyle = xlContinuous
@@ -517,14 +555,14 @@ Public Sub HandleSuiviDesEtudesChange( _
             End With
         Next c
 
-        ' ?? Copier les couleurs du planning affaires
+        ' --- Copie les couleurs du planning affaires ---
         Dim wsPA As Worksheet: Set wsPA = ThisWorkbook.Sheets("PLANNING AFFAIRES")
         Dim dateSDE As Variant: dateSDE = wsSDE.Cells(pasteRow, 5).Value
         If IsDate(dateSDE) Then
             Dim colPA As Long: colPA = -1
             Dim rPA As Long
 
-            ' Trouver la colonne correspondante à la date dans la ligne 4
+            ' Recherche de la colonne contenant la date dans la ligne 4 de PA
             For c = 1 To wsPA.Columns.Count
                 If IsDate(wsPA.Cells(4, c).Value) Then
                     If DateValue(wsPA.Cells(4, c).Value) = DateValue(dateSDE) Then
@@ -534,7 +572,7 @@ Public Sub HandleSuiviDesEtudesChange( _
                 End If
             Next c
 
-            ' Trouver la ligne repère
+            ' Recherche de la ligne "repère" à partir de la désignation spécifique
             Dim repereRow As Long
             For rPA = 1 To wsPA.Rows.Count
                 If Trim(wsPA.Cells(rPA, "K").Value) = "CONGES   /   R.T.T.   /   FORMATIONS   /   ABSENCES …" Then
@@ -543,13 +581,14 @@ Public Sub HandleSuiviDesEtudesChange( _
                 End If
             Next rPA
 
+            ' Si la date et la ligne repère ont été trouvées, copie les couleurs (jusqu'à 4 lignes)
             If colPA > 0 And repereRow > 0 Then
                 Dim rowSDE As Long: rowSDE = pasteRow
                 Dim ligneDest As Long: ligneDest = 24 ' Colonne X
                 For rPA = repereRow + 1 To wsPA.Cells(wsPA.Rows.Count, colPA).End(xlUp).row
                     If ligneDest > 27 Then Exit For
                     With wsPA.Cells(rPA, colPA)
-                        If .Interior.Color <> RGB(255, 255, 255) Then ' Ignorer le blanc
+                        If .Interior.Color <> RGB(255, 255, 255) Then
                             wsSDE.Cells(rowSDE, ligneDest).Interior.Color = .Interior.Color
                         End If
                     End With
@@ -558,7 +597,7 @@ Public Sub HandleSuiviDesEtudesChange( _
             End If
         End If
 
-        ' --- Ajout ligne rouge si absente ---
+        ' --- Vérifie si une ligne de séparation pour la semaine existe déjà ---
         Dim semaineActuelle As String
         semaineActuelle = "S" & WorksheetFunction.WeekNum(wsSDE.Cells(pasteRow, 5).Value, 2)
         Dim ligneSeparateurExiste As Boolean: ligneSeparateurExiste = False
@@ -570,10 +609,12 @@ Public Sub HandleSuiviDesEtudesChange( _
             End If
         Next r
 
+        ' --- Si aucune ligne rouge pour cette semaine, on en insère une ---
         If Not ligneSeparateurExiste Then
             Dim ligneSeparateur As Long
             ligneSeparateur = wsSDE.Cells(wsSDE.Rows.Count, 2).End(xlUp).row + 1
 
+            ' Calcul du dernier jour de la semaine (dimanche)
             Dim dateRef As Date: dateRef = wsSDE.Cells(pasteRow, 5).Value
             Dim lastDay As Date: lastDay = dateRef + (7 - Weekday(dateRef, vbMonday))
 
@@ -582,9 +623,11 @@ Public Sub HandleSuiviDesEtudesChange( _
                 .Cells(ligneSeparateur, 5).Value = lastDay
                 .Cells(ligneSeparateur, 26).Value = "#SEPARATOR"
 
+                ' Applique un fond rouge et une police rouge sur toute la ligne
                 .Range(.Cells(ligneSeparateur, 1), .Cells(ligneSeparateur, 27)).Interior.Color = RGB(255, 0, 0)
                 .Range(.Cells(ligneSeparateur, 1), .Cells(ligneSeparateur, 27)).Font.Color = RGB(255, 0, 0)
 
+                ' Bordures autour de la ligne rouge
                 For c = 1 To 27
                     With .Cells(ligneSeparateur, c).Borders
                         .LineStyle = xlContinuous
@@ -594,27 +637,28 @@ Public Sub HandleSuiviDesEtudesChange( _
             End With
         End If
 
-        ' --- Tri final ---
+        ' --- Tri final des lignes par semaine + séparation visuelle ---
         Call TrierEtSéparerParSemaine(wsSDE)
     End If
 End Sub
 
-
-
 Public Sub TrierEtSéparerParSemaine(ws As Worksheet)
-    Dim startRow As Long: startRow = 7
+    ' --- Début : préparation des lignes à trier ---
+    Dim startRow As Long: startRow = 7 ' On commence à trier à partir de la ligne 7
     Dim lastRow As Long
-    lastRow = ws.Cells(ws.Rows.Count, "E").End(xlUp).row
-    If lastRow < startRow Then Exit Sub
+    lastRow = ws.Cells(ws.Rows.Count, "E").End(xlUp).row ' Dernière ligne remplie en colonne E (date)
+    If lastRow < startRow Then Exit Sub ' Rien à trier si aucune donnée
 
+    ' On définit la plage de données à trier (colonnes A à AA)
     Dim dataRange As Range
     Set dataRange = ws.Range("A" & startRow & ":AA" & lastRow)
 
+    ' --- Création d'une feuille temporaire pour faire le tri ---
     Dim tempSheet As Worksheet
     Set tempSheet = Worksheets.Add(After:=ws)
     dataRange.Copy Destination:=tempSheet.Range("A1")
 
-    ' --- Trier par date (colonne E)
+    ' --- Tri de la plage par date croissante (colonne E) ---
     With tempSheet.Sort
         .SortFields.Clear
         .SortFields.Add Key:=tempSheet.Range("E1:E" & dataRange.Rows.Count), _
@@ -624,34 +668,38 @@ Public Sub TrierEtSéparerParSemaine(ws As Worksheet)
         .Apply
     End With
 
+    ' --- On vide la plage d'origine pour pouvoir tout reconstituer proprement ---
     ws.Range("A" & startRow & ":AA" & ws.Rows.Count).ClearContents
 
+    ' --- Réinsertion des lignes triées ---
     Dim i As Long, pasteRow As Long: pasteRow = startRow
     Dim currentWeek As String, previousWeek As String
     Dim dateCourante As Variant
     Dim currentID As String, previousID As String
 
     For i = 1 To dataRange.Rows.Count
-        currentWeek = tempSheet.Cells(i, 1).Value
-        dateCourante = tempSheet.Cells(i, 5).Value
-        currentID = tempSheet.Cells(i, 36).Value ' colonne JZ = 36
+        currentWeek = tempSheet.Cells(i, 1).Value             ' Semaine de la ligne (ex. : S32)
+        dateCourante = tempSheet.Cells(i, 5).Value            ' Date de la ligne
+        currentID = tempSheet.Cells(i, 36).Value              ' ID unique (colonne JZ = 36)
 
-        ' ? Nouvelle semaine (et pas tout début) ? ajouter une ligne rouge
+        ' --- Si on change de semaine et qu’on n’est pas tout en haut, on ajoute une ligne rouge ---
         If currentWeek <> previousWeek And currentWeek <> "" And pasteRow > startRow Then
-            ' On vérifie que la ligne précédente n’est pas déjà un séparateur
             If ws.Cells(pasteRow - 1, 26).Value <> "#SEPARATOR" Then
                 With ws
+                    ' Insère le texte de la semaine et la date de fin de semaine (dimanche)
                     .Cells(pasteRow, 1).Value = currentWeek
-
                     If IsDate(dateCourante) Then
                         Dim d As Date: d = CDate(dateCourante)
                         .Cells(pasteRow, 5).Value = d + (7 - Weekday(d, vbMonday))
                     End If
 
                     .Cells(pasteRow, 26).Value = "#SEPARATOR"
+
+                    ' Applique couleur rouge sur toute la ligne (fond et texte)
                     .Range(.Cells(pasteRow, 1), .Cells(pasteRow, 27)).Interior.Color = RGB(255, 0, 0)
                     .Range(.Cells(pasteRow, 1), .Cells(pasteRow, 27)).Font.Color = RGB(255, 0, 0)
 
+                    ' Ajoute les bordures pour chaque cellule de la ligne rouge
                     Dim c As Long
                     For c = 1 To 27
                         With .Cells(pasteRow, c).Borders
@@ -660,28 +708,30 @@ Public Sub TrierEtSéparerParSemaine(ws As Worksheet)
                         End With
                     Next c
                 End With
-                pasteRow = pasteRow + 1
+                pasteRow = pasteRow + 1 ' Incrémente la ligne pour insérer la donnée ensuite
             End If
         End If
 
-        ' Coller la ligne
+        ' --- Copie la ligne de données depuis la feuille temporaire vers la feuille principale ---
         tempSheet.Range(tempSheet.Cells(i, 1), tempSheet.Cells(i, 27)).Copy
         ws.Cells(pasteRow, 1).PasteSpecial Paste:=xlPasteValues
         ws.Cells(pasteRow, 1).PasteSpecial Paste:=xlPasteFormats
 
-        ' Replacer l'ID original si présent
+        ' --- Remet l’ID original en colonne JZ (non visible dans le tableau) ---
         ws.Cells(pasteRow, 36).Value = currentID
         pasteRow = pasteRow + 1
 
+        ' --- Mise à jour de la "semaine précédente" ---
         previousWeek = currentWeek
         previousID = currentID
     Next i
 
+    ' --- Supprime la feuille temporaire utilisée pour le tri ---
     Application.DisplayAlerts = False
     tempSheet.Delete
     Application.DisplayAlerts = True
 
-    ' --- ?? Supprimer les lignes rouges en double avec la même date ---
+    ' --- Suppression des doublons de lignes rouges (même date de fin de semaine) ---
     Dim row As Long
     For row = ws.Cells(ws.Rows.Count, 26).End(xlUp).row To startRow + 1 Step -1
         If ws.Cells(row, 26).Value = "#SEPARATOR" And ws.Cells(row - 1, 26).Value = "#SEPARATOR" Then
@@ -692,37 +742,33 @@ Public Sub TrierEtSéparerParSemaine(ws As Worksheet)
     Next row
 End Sub
 
-
-
-
-
-
-'------------------------------
-' 4) Synchro Coloration planning (avec DEBUG, DÉCALÉ +1)
-'------------------------------
 Public Sub SynchroniseCasePlanning(ByVal srcRow As Long)
+    ' --- Cette procédure synchronise la couleur de case planning entre la feuille active et "PLANNING METRE ET GEOMETRE" ---
+    
     Const FEUILLE_CIBLE As String = "PLANNING METRE ET GEOMETRE"
-    Const COL_DATE As Long = 12        ' K -> L (décalé +1)
-    Const COL_COULEUR As Long = 5      ' D -> E (décalé +1)
-    Const COL_ID As Long = 286         ' JZ -> KZ (décalé +1)
-    Const HEADER_ROW As Long = 5
-    Const START_COL As Long = 20       ' T -> U (décalé +1)
+    Const COL_DATE As Long = 12        ' Colonne contenant la date (K dans feuille source)
+    Const COL_COULEUR As Long = 5      ' Colonne contenant la couleur (D)
+    Const COL_ID As Long = 286         ' Identifiant unique de ligne (JZ)
+    Const HEADER_ROW As Long = 5       ' Ligne contenant les dates dans le planning
+    Const START_COL As Long = 20       ' Première colonne de planning (T)
 
     Dim wsSrc As Worksheet: Set wsSrc = Me
     Dim wsDst As Worksheet: Set wsDst = ThisWorkbook.Sheets(FEUILLE_CIBLE)
     Dim id As Variant: id = wsSrc.Cells(srcRow, COL_ID).Value
 
+    ' Si pas d'ID, on ne fait rien
     If id = "" Then
         Exit Sub
     End If
 
+    ' On récupère la date et la couleur de la ligne source
     Dim dateAffaire As Variant: dateAffaire = wsSrc.Cells(srcRow, COL_DATE).Value
     Dim coulAffaire As Long: coulAffaire = wsSrc.Cells(srcRow, COL_COULEUR).Interior.Color
 
-    ' --- 1) Colorie la case planning dans la feuille SOURCE (PLANNING AFFAIRES) ---
+    ' On colorie la case dans la feuille active (elle-même)
     Call ColorieCasePlanning(wsSrc, srcRow, dateAffaire, coulAffaire, 4, START_COL)
 
-    ' --- 2) Cherche la ligne à colorier dans la feuille cible (PLANNING METRE ET GEOMETRE) ---
+    ' On cherche la ligne correspondante dans la feuille de destination
     Dim dstRow As Long, lastRow As Long
     lastRow = wsDst.Cells(wsDst.Rows.Count, COL_ID).End(xlUp).row
     dstRow = 0
@@ -733,34 +779,31 @@ Public Sub SynchroniseCasePlanning(ByVal srcRow As Long)
             Exit For
         End If
     Next r
-    If dstRow = 0 Then
-        Exit Sub
-    End If
+    If dstRow = 0 Then Exit Sub
 
-    ' --- 3) Colorie la case planning dans la feuille CIBLE (PLANNING METRE ET GEOMETRE) ---
+    ' Et on colorie la case correspondante dans "PLANNING METRE ET GEOMETRE"
     Call ColorieCasePlanning(wsDst, dstRow, dateAffaire, coulAffaire, 5, START_COL)
 End Sub
 
-'------------------------------
-' 5) Gestion Chargé d'étude EXC (col E = 5, J = 11, U = 21)
-'------------------------------
 Private Sub GérerChargéEtudeExc(ByVal Target As Range)
+    ' --- Cette procédure colore en jaune certaines cellules si la valeur "exc" est détectée dans la cellule modifiée ---
+
     Dim ligne As Long: ligne = Target.row
     Dim ws    As Worksheet: Set ws = Me
     Dim v     As String: v = LCase(Trim(Target.Value))
     Dim yel   As Long: yel = RGB(255, 255, 153)
 
-    ' Nettoyage préalable
+    ' --- Nettoyage des cellules D et J si elles étaient en jaune ---
     If ws.Cells(ligne, 5).Interior.Color = yel Then ws.Cells(ligne, 5).Interior.ColorIndex = xlColorIndexNone
     If ws.Cells(ligne, 11).Interior.Color = yel Then ws.Cells(ligne, 11).Interior.ColorIndex = xlColorIndexNone
 
-    ' Nettoyage colonne 21 : retire couleur et texte "Exc" QUOI QU'IL ARRIVE quand on retire "exc"
+    ' --- Nettoyage de la colonne 21 même si ce n'est pas "exc" ---
     If v <> "exc" Then
         ws.Cells(ligne, 21).Interior.ColorIndex = xlColorIndexNone
         If ws.Cells(ligne, 21).Value = "Exc" Then ws.Cells(ligne, 21).Value = ""
     End If
 
-    ' Application si “exc”
+    ' --- Si "exc" est saisi, on applique la couleur jaune et on écrit "Exc" ---
     If v = "exc" Then
         ws.Cells(ligne, 5).Interior.Color = yel
         ws.Cells(ligne, 11).Interior.Color = yel
@@ -769,14 +812,13 @@ Private Sub GérerChargéEtudeExc(ByVal Target As Range)
     End If
 End Sub
 
-'------------------------------
-' 6) ColorieCasePlanning, tout décalé d'UNE colonne
-'------------------------------
 Public Sub ColorieCasePlanning(ByVal ws As Worksheet, ByVal srcRow As Long, ByVal dateAffaire As Variant, ByVal coulAffaire As Long, ByVal HEADER_ROW As Long, ByVal START_COL_INIT As Long)
+    ' --- Colorie une cellule dans le planning en fonction de la date et de la couleur fournie ---
+    
     Dim lastCol As Long, i As Long
     lastCol = ws.Columns.Count
 
-    ' --- Décale START_COL de +2 si feuille METRE & GEOMÈTRE ---
+    ' --- Si on est sur la feuille METRE & GEOMETRE, on décale les colonnes de +2 (plus à droite) ---
     Dim START_COL As Long
     If ws.Name = "PLANNING METRE ET GEOMETRE" Then
         START_COL = START_COL_INIT + 2
@@ -784,10 +826,12 @@ Public Sub ColorieCasePlanning(ByVal ws As Worksheet, ByVal srcRow As Long, ByVa
         START_COL = START_COL_INIT
     End If
 
+    ' --- Nettoyage : on efface les couleurs de la ligne dans la plage de planning ---
     For i = START_COL To lastCol
         ws.Cells(srcRow, i).Interior.ColorIndex = xlColorIndexNone
     Next i
 
+    ' --- On cherche la colonne correspondant à la date donnée, puis on applique la couleur ---
     If IsDate(dateAffaire) Then
         Dim trouve As Boolean: trouve = False
         For i = START_COL To lastCol
@@ -801,6 +845,8 @@ Public Sub ColorieCasePlanning(ByVal ws As Worksheet, ByVal srcRow As Long, ByVa
                 End If
             End If
         Next i
+
+        ' Message en debug si la date n'a pas été trouvée dans les colonnes
         If Not trouve Then
             Debug.Print ">>> Aucune colonne planning correspondante trouvée pour la date."
         End If
@@ -808,7 +854,7 @@ Public Sub ColorieCasePlanning(ByVal ws As Worksheet, ByVal srcRow As Long, ByVa
         Debug.Print ">>> La date à colorier n'est pas reconnue comme date."
     End If
 
-    ' --- 4) Colore en rouge pétant tous les jours fériés présents dans le planning
+    ' --- On colore les jours fériés en rouge (si trouvés dans le planning) ---
     Dim rougeFerie As Long: rougeFerie = RGB(255, 0, 0)
     For i = START_COL To lastCol
         If IsDate(ws.Cells(HEADER_ROW, i).Value) Then
@@ -818,4 +864,3 @@ Public Sub ColorieCasePlanning(ByVal ws As Worksheet, ByVal srcRow As Long, ByVa
         End If
     Next i
 End Sub
-
