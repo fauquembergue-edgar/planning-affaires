@@ -1,0 +1,147 @@
+Private Sub Worksheet_Change(ByVal Target As Range)
+    Const COL_DATE_Q As Long = 17  ' Q
+    Const COL_COULEUR_Q As Long = 16 ' P
+    Const HEADER_ROW As Long = 5
+    Const START_COL As Long = 22
+
+    If Target.Cells.Count > 1 Then Exit Sub
+
+    On Error GoTo Fin
+    Application.EnableEvents = False
+
+    ' On gère la colonne Q (date à colorier) ou la colonne P (couleur)
+    If Target.Column = COL_DATE_Q Or Target.Column = COL_COULEUR_Q Then
+        Dim laDateQ As Variant, laCouleurQ As Long, laOldDateQ As Variant
+        laDateQ = Me.Cells(Target.row, COL_DATE_Q).Value
+        laCouleurQ = Me.Cells(Target.row, COL_COULEUR_Q).Interior.Color
+
+        ' Pour la suppression ou le changement, il faut effacer l'ancienne couleur
+        Static OldDateQ As Variant
+        Static OldRow As Long
+        Static OldCol As Long
+
+        Debug.Print "==> Worksheet_Change : Modification ligne " & Target.row & ", col " & Target.Column
+        Debug.Print "    Nouvelle valeur Q = [" & laDateQ & "], Couleur = " & laCouleurQ
+
+        If Not IsDate(laDateQ) Then
+            ' Efface seulement la couleur de l'ancienne date Q (si connue)
+            If Not isEmpty(OldDateQ) And OldRow = Target.row Then
+                Debug.Print "    Effacement couleur case planning pour ancienne date Q : " & OldDateQ
+                Call EnleveCouleurCaseDate(Me, Target.row, HEADER_ROW, START_COL, OldDateQ)
+            End If
+        Else
+            ' Si on change de date, efface ancienne (si connue), colore la nouvelle
+            If Not isEmpty(OldDateQ) And OldRow = Target.row And OldDateQ <> laDateQ Then
+                Debug.Print "    Changement de date Q : efface ancienne case " & OldDateQ
+                Call EnleveCouleurCaseDate(Me, Target.row, HEADER_ROW, START_COL, OldDateQ)
+            End If
+            ' Applique la couleur sur la nouvelle date
+            Debug.Print "    Coloriage nouvelle case planning pour date Q : " & laDateQ
+            Call ColorieCaseQ(Me, Target.row, HEADER_ROW, START_COL, laDateQ, laCouleurQ)
+        End If
+
+        ' Mémorise la date Q pour ce row pour prochain changement
+        OldDateQ = laDateQ
+        OldRow = Target.row
+    End If
+
+Fin:
+    Application.EnableEvents = True
+End Sub
+
+'--- Colorie la case correspondant à la date (Q)
+Public Sub ColorieCaseQ(ws As Worksheet, ByVal srcRow As Long, ByVal HEADER_ROW As Long, ByVal START_COL_INIT As Long, ByVal dateQ As Variant, ByVal couleurQ As Long)
+    Dim lastCol As Long, i As Long
+    lastCol = ws.Columns.Count
+
+    Dim START_COL As Long
+    If ws.Name = "PLANNING METRE ET GEOMETRE" Then
+        START_COL = START_COL_INIT + 2
+    Else
+        START_COL = START_COL_INIT
+    End If
+
+    If IsDate(dateQ) Then
+        For i = START_COL To lastCol
+            If IsDate(ws.Cells(HEADER_ROW, i).Value) Then
+                If ws.Cells(HEADER_ROW, i).Value = dateQ Then
+                    Debug.Print "      ColorieCaseQ : Colore (" & srcRow & "," & i & ") couleur " & couleurQ
+                    ws.Cells(srcRow, i).Interior.Color = couleurQ
+                    Exit For
+                End If
+            End If
+        Next i
+    End If
+End Sub
+
+'--- Efface la couleur pour la date ancienne
+Public Sub EnleveCouleurCaseDate(ws As Worksheet, ByVal srcRow As Long, ByVal HEADER_ROW As Long, ByVal START_COL_INIT As Long, ByVal dateQ As Variant)
+    Dim lastCol As Long, i As Long
+    lastCol = ws.Columns.Count
+
+    Dim START_COL As Long
+    If ws.Name = "PLANNING METRE ET GEOMETRE" Then
+        START_COL = START_COL_INIT + 2
+    Else
+        START_COL = START_COL_INIT
+    End If
+
+    If IsDate(dateQ) Then
+        For i = START_COL To lastCol
+            If IsDate(ws.Cells(HEADER_ROW, i).Value) Then
+                If ws.Cells(HEADER_ROW, i).Value = dateQ Then
+                    Debug.Print "      EnleveCouleurCaseDate : Efface (" & srcRow & "," & i & ")"
+                    ws.Cells(srcRow, i).Interior.ColorIndex = xlColorIndexNone
+                    Exit For
+                End If
+            End If
+        Next i
+    End If
+End Sub
+
+
+
+Public Sub ColorieCasePlanning(ws As Worksheet, ByVal srcRow As Long, ByVal dateAffaire As Variant, ByVal coulAffaire As Long, ByVal HEADER_ROW As Long, ByVal START_COL_INIT As Long)
+    Dim lastCol As Long, i As Long
+    lastCol = ws.Columns.Count
+
+    Dim START_COL As Long
+    If ws.Name = "PLANNING METRE ET GEOMETRE" Then
+        START_COL = START_COL_INIT + 2
+    Else
+        START_COL = START_COL_INIT
+    End If
+
+    Debug.Print "--- ColorieCasePlanning ---"
+    Debug.Print "  Feuille : " & ws.Name
+    Debug.Print "  Ligne = " & srcRow & ", HEADER_ROW = " & HEADER_ROW & ", START_COL = " & START_COL & ", lastCol = " & lastCol
+    Debug.Print "  dateAffaire = [" & dateAffaire & "] (type=" & TypeName(dateAffaire) & "), coulAffaire = " & coulAffaire
+
+    ' On efface d’abord les anciennes couleurs sur toute la ligne planning
+    For i = START_COL To lastCol
+        ws.Cells(srcRow, i).Interior.ColorIndex = xlColorIndexNone
+    Next i
+
+    If IsDate(dateAffaire) Then
+        Dim trouve As Boolean: trouve = False
+        For i = START_COL To lastCol
+            If IsDate(ws.Cells(HEADER_ROW, i).Value) Then
+                If Day(ws.Cells(HEADER_ROW, i).Value) = Day(dateAffaire) And _
+                   Month(ws.Cells(HEADER_ROW, i).Value) = Month(dateAffaire) And _
+                   Year(ws.Cells(HEADER_ROW, i).Value) = Year(dateAffaire) Then
+                    Debug.Print "      >>> MATCH! On applique la couleur " & coulAffaire & " à (" & srcRow & "," & i & ")"
+                    ws.Cells(srcRow, i).Interior.Color = coulAffaire
+                    trouve = True
+                    Exit For
+                End If
+            End If
+        Next i
+        If Not trouve Then
+            Debug.Print ">>> Aucune colonne planning correspondante trouvée pour la date."
+        End If
+    Else
+        Debug.Print ">>> La date à colorier n'est pas reconnue comme date."
+    End If
+End Sub
+
+
